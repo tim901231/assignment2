@@ -1,6 +1,8 @@
 import argparse
 import os
 import time
+import numpy as np
+
 
 import losses
 from pytorch3d.utils import ico_sphere
@@ -9,8 +11,10 @@ from pytorch3d.ops import sample_points_from_meshes
 from pytorch3d.structures import Meshes
 import dataset_location
 import torch
+import imageio
+import pytorch3d
 
-
+from utils_vox import visualize_vox, visualize_mesh, visualize_point_cloud
 
 
 
@@ -30,7 +34,7 @@ def fit_mesh(mesh_src, mesh_tgt, args):
     start_iter = 0
     start_time = time.time()
 
-    deform_vertices_src = torch.zeros(mesh_src.verts_packed().shape, requires_grad=True, device='cuda')
+    deform_vertices_src = torch.zeros(mesh_src.verts_packed().shape, requires_grad=True, device=args.device)
     optimizer = torch.optim.Adam([deform_vertices_src], lr = args.lr)
     print("Starting training !")
     for step in range(start_iter, args.max_iter):
@@ -61,6 +65,21 @@ def fit_mesh(mesh_src, mesh_tgt, args):
 
     print('Done!')
 
+    # Q =====================1-3=======================
+
+    print(mesh_src)
+    src_images = visualize_mesh(mesh_src)
+    tgt_images = visualize_mesh(mesh_tgt)
+
+    images = []
+    for a, b in zip(src_images, tgt_images):
+        images.append(np.hstack((a, b)))
+    
+    n_frames = 15
+    my_images = [(frame * 255).astype(np.uint8) if frame.dtype != np.uint8 else frame for frame in images]
+    duration = 1000 // n_frames # Convert FPS (frames per second) to duration (ms per frame)
+    imageio.mimsave('q1-3.gif', my_images, duration=duration, loop=0)
+
 
 def fit_pointcloud(pointclouds_src, pointclouds_tgt, args):
     start_iter = 0
@@ -83,6 +102,33 @@ def fit_pointcloud(pointclouds_src, pointclouds_tgt, args):
         print("[%4d/%4d]; ttime: %.0f (%.2f); loss: %.3f" % (step, args.max_iter, total_time,  iter_time, loss_vis))
     
     print('Done!')
+
+    # Q1.2
+
+    points = pointclouds_src[0]
+    color = (points - points.min()) / (points.max() - points.min())
+    point_cloud = pytorch3d.structures.Pointclouds(
+        points=[points], features=[color],
+    ).to(args.device)
+
+    src_images = visualize_point_cloud(point_cloud)
+
+    points = pointclouds_tgt[0]
+    color = (points - points.min()) / (points.max() - points.min())
+    point_cloud = pytorch3d.structures.Pointclouds(
+        points=[points], features=[color],
+    ).to(args.device)
+
+    tgt_images = visualize_point_cloud(point_cloud)
+
+    images = []
+    for a, b in zip(src_images, tgt_images):
+        images.append(np.hstack((a, b)))
+    
+    n_frames = 15
+    my_images = [(frame * 255).astype(np.uint8) if frame.dtype != np.uint8 else frame for frame in images]
+    duration = 1000 // n_frames # Convert FPS (frames per second) to duration (ms per frame)
+    imageio.mimsave('q1-2.gif', my_images, duration=duration, loop=0)
 
 
 def fit_voxel(voxels_src, voxels_tgt, args):
@@ -107,13 +153,24 @@ def fit_voxel(voxels_src, voxels_tgt, args):
     
     print('Done!')
 
+    # Q1.1
+    src_images = visualize_vox(voxels_src[0])
+    tgt_images = visualize_vox(voxels_tgt[0])
+
+    images = []
+    for a, b in zip(src_images, tgt_images):
+        images.append(np.hstack((a, b)))
+    
+    n_frames = 15
+    my_images = [(frame * 255).astype(np.uint8) if frame.dtype != np.uint8 else frame for frame in images]
+    duration = 1000 // n_frames # Convert FPS (frames per second) to duration (ms per frame)
+    imageio.mimsave('q1.gif', my_images, duration=duration, loop=0)
+
 
 def train_model(args):
     r2n2_dataset = R2N2("train", dataset_location.SHAPENET_PATH, dataset_location.R2N2_PATH, dataset_location.SPLITS_PATH, return_voxels=True)
-
     
     feed = r2n2_dataset[0]
-
 
     feed_cuda = {}
     for k in feed:
@@ -129,7 +186,6 @@ def train_model(args):
 
         # fitting
         fit_voxel(voxels_src, voxels_tgt, args)
-
 
     elif args.type == "point":
         # initialization

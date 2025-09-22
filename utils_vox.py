@@ -2,6 +2,15 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 
+# ================ new stuff ==================
+import mcubes
+import pytorch3d
+from utils import get_mesh_renderer, get_points_renderer
+from pytorch3d.renderer import look_at_view_transform, TexturesVertex
+import imageio
+from tqdm import tqdm
+from pytorch3d.structures import Meshes 
+# ===========================================
 
 XMIN = -0.5 # right (neg is left)
 XMAX = 0.5 # right
@@ -158,4 +167,88 @@ def get_inbounds(xyz, Z, Y, X, already_mem=False):
     inbounds = x_valid & y_valid & z_valid
     return inbounds.bool()
 
+def visualize_vox(voxels):
 
+    voxel_size = voxels.shape[1]
+    device = voxels.device
+
+    vertices, faces = mcubes.marching_cubes(mcubes.smooth(voxels.cpu().detach().numpy()), isovalue=0)
+    vertices = torch.tensor(vertices).float()
+    faces = torch.tensor(faces.astype(int))
+    # Vertex coordinates are indexed by array position, so we need to
+    # renormalize the coordinate system.
+    vertices = (vertices / voxel_size) - 0.5
+    textures = (vertices - vertices.min()) / (vertices.max() - vertices.min())
+    textures = pytorch3d.renderer.TexturesVertex(vertices.unsqueeze(0))
+
+    mesh = pytorch3d.structures.Meshes([vertices], [faces], textures=textures)
+    mesh = mesh.to(device=device)
+
+    return visualize_mesh(mesh)
+
+    
+def visualize_point_cloud(point_cloud, image_size=256, n_frames=15):
+
+    renderer = get_points_renderer(image_size=image_size)
+
+    degree = 360 / n_frames
+    images = []
+
+    for i in tqdm(range(n_frames)):
+        R, T = look_at_view_transform(dist=3, elev=0, azim=i*degree)
+
+        cameras = pytorch3d.renderer.FoVPerspectiveCameras(
+            R=R, T=T, fov=60, device=point_cloud.device
+        )
+
+        rend = renderer(point_cloud, cameras=cameras)
+        rend = rend.cpu().detach().numpy()[0, ..., :3]
+
+        images.append(rend)
+    
+    return images
+
+    
+
+def visualize_mesh(mesh, image_size=256, n_frames=15):
+    if mesh.textures is None:
+        # Get the device from the mesh
+        device = mesh.device
+        
+        # Get the vertices for the texture
+        verts = mesh.verts_packed()
+        
+        # Create a uniform gray color for all vertices.
+        # The shape should be (num_verts, 3) for the features.
+        # We use 0.7 for a light gray.
+        color = torch.ones(verts.shape[0], 3, device=device) * 0.7
+        
+        # Create a new TexturesVertex object
+        textures = TexturesVertex(verts_features=[color])
+        
+        # Create a new Meshes object with the texture.
+        # This new mesh will be used for rendering.
+        mesh = Meshes(
+            verts=mesh.verts_list(), 
+            faces=mesh.faces_list(), 
+            textures=textures
+        )
+
+    renderer = get_mesh_renderer(image_size=image_size)
+
+    degree = 360 / n_frames
+    images = []
+
+    for i in tqdm(range(n_frames)):
+        R, T = look_at_view_transform(dist=3, elev=0, azim=i*degree)
+
+        cameras = pytorch3d.renderer.FoVPerspectiveCameras(
+            R=R, T=T, fov=60, device=mesh.device
+        )
+
+        rend = renderer(mesh, cameras=cameras)
+        rend = rend.cpu().detach().numpy()[0, ..., :3]
+
+        images.append(rend)
+    
+    return images
