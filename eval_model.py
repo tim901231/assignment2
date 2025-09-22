@@ -15,6 +15,10 @@ from pytorch3d.transforms import Rotate, axis_angle_to_matrix
 import math
 import numpy as np
 
+import imageio
+from utils_vox import visualize_vox, visualize_mesh, visualize_point_cloud
+
+
 def get_args_parser():
     parser = argparse.ArgumentParser('Singleto3D', add_help=False)
     parser.add_argument('--arch', default='resnet18', type=str)
@@ -165,10 +169,21 @@ def evaluate_model(args):
         metrics = evaluate(predictions, mesh_gt, thresholds, args)
 
         # TODO:
-        # if (step % args.vis_freq) == 0:
-        #     # visualization block
-        #     #  rend = 
-        #     plt.imsave(f'vis/{step}_{args.type}.png', rend)
+        if (step % args.vis_freq) == 0:
+
+            if args.type == 'vox':
+                src_images = visualize_vox(predictions[0])
+                tgt_images = visualize_mesh(mesh_gt[0])
+
+                images = []
+                for a, b in zip(src_images, tgt_images):
+                    images.append(np.hstack((images_gt, a, b)))
+                
+                n_frames = 15
+                my_images = [(frame * 255).astype(np.uint8) if frame.dtype != np.uint8 else frame for frame in images]
+                duration = 1000 // n_frames # Convert FPS (frames per second) to duration (ms per frame)
+                imageio.mimsave(f'vis/{step}_vox.gif', my_images, duration=duration, loop=0)
+            # plt.imsave(f'vis/{step}_{args.type}.png', rend)
       
 
         total_time = time.time() - start_time
