@@ -74,6 +74,7 @@ def train_model(args):
         return_voxels=True,
         return_feats=args.load_feat,
     )
+    print(len(r2n2_dataset))
 
     loader = torch.utils.data.DataLoader(
         r2n2_dataset,

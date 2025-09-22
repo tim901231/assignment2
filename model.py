@@ -18,11 +18,25 @@ class SingleViewto3D(nn.Module):
 
         # define decoder
         if args.type == "vox":
-            # Input: b x 512
+            # Input: b x 512 -> b x 64 x 2 x 2 x 2
             # Output: b x 32 x 32 x 32
             pass
             # TODO:
-            # self.decoder =             
+            self.decoder = nn.Sequential(
+                torch.nn.ConvTranspose3d(64, 32, kernel_size=4, stride=2, bias=False, padding=1), #shape: 32 x 4 x 4 x 4
+                torch.nn.BatchNorm3d(32),
+                torch.nn.ReLU(),
+                torch.nn.ConvTranspose3d(32, 16, kernel_size=4, stride=2, bias=False, padding=1), # shape: 16 x 8 x 8 x 8
+                torch.nn.BatchNorm3d(16),
+                torch.nn.ReLU(),
+                torch.nn.ConvTranspose3d(16, 8, kernel_size=4, stride=2, bias=False, padding=1), #shape: 8 x 16 x 16 x 16
+                torch.nn.BatchNorm3d(8),
+                torch.nn.ReLU(),
+                torch.nn.ConvTranspose3d(8, 4, kernel_size=4, stride=2, bias=False, padding=1), #shape: 4 x 32 x 32 x 32
+                torch.nn.BatchNorm3d(4),
+                torch.nn.ReLU(),
+                torch.nn.ConvTranspose3d(4, 1, kernel_size=1, bias=False)
+            )        
         elif args.type == "point":
             # Input: b x 512
             # Output: b x args.n_points x 3  
@@ -55,7 +69,8 @@ class SingleViewto3D(nn.Module):
         # call decoder
         if args.type == "vox":
             # TODO:
-            # voxels_pred =             
+            encoded_feat = encoded_feat.reshape(B, 64, 2, 2, 2)
+            voxels_pred = self.decoder(encoded_feat)
             return voxels_pred
 
         elif args.type == "point":

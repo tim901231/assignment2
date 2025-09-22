@@ -195,7 +195,7 @@ def visualize_point_cloud(point_cloud, image_size=256, n_frames=15):
     images = []
 
     for i in tqdm(range(n_frames)):
-        R, T = look_at_view_transform(dist=3, elev=0, azim=i*degree)
+        R, T = look_at_view_transform(dist=2, elev=0, azim=i*degree)
 
         cameras = pytorch3d.renderer.FoVPerspectiveCameras(
             R=R, T=T, fov=60, device=point_cloud.device
@@ -240,7 +240,7 @@ def visualize_mesh(mesh, image_size=256, n_frames=15):
     images = []
 
     for i in tqdm(range(n_frames)):
-        R, T = look_at_view_transform(dist=3, elev=0, azim=i*degree)
+        R, T = look_at_view_transform(dist=2, elev=0, azim=i*degree)
 
         cameras = pytorch3d.renderer.FoVPerspectiveCameras(
             R=R, T=T, fov=60, device=mesh.device

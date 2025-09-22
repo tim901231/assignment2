@@ -16,12 +16,10 @@ def chamfer_loss(point_cloud_src,point_cloud_tgt):
 	# point_cloud_src, point_cloud_src: b x n_points x 3  
 	# loss_chamfer = 
 	# implement chamfer loss from scratch
-	_, _, pc_src_nn = knn_points(point_cloud_src, point_cloud_tgt, return_nn=True)
-	_, _, pc_tgt_nn = knn_points(point_cloud_tgt, point_cloud_src, return_nn=True)
+	dist_src, _, _ = knn_points(point_cloud_src, point_cloud_tgt, return_nn=True)
+	dist_tgt, _, _ = knn_points(point_cloud_tgt, point_cloud_src, return_nn=True)
 
-	criterion = torch.nn.MSELoss()
-
-	loss_chamfer = (criterion(point_cloud_src, pc_src_nn) + criterion(point_cloud_tgt, pc_tgt_nn)) / 2
+	loss_chamfer = (torch.mean(dist_src) + torch.mean(dist_tgt)) / 2
 
 	return loss_chamfer
 
