@@ -16,13 +16,14 @@ import math
 import numpy as np
 
 import imageio
+import cv2
 from utils_vox import visualize_vox, visualize_mesh, visualize_point_cloud
 
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Singleto3D', add_help=False)
     parser.add_argument('--arch', default='resnet18', type=str)
-    parser.add_argument('--vis_freq', default=1000, type=int)
+    parser.add_argument('--vis_freq', default=100, type=int)
     parser.add_argument('--batch_size', default=1, type=int)
     parser.add_argument('--num_workers', default=0, type=int)
     parser.add_argument('--type', default='vox', choices=['vox', 'point', 'mesh'], type=str)
@@ -32,6 +33,7 @@ def get_args_parser():
     parser.add_argument('--load_checkpoint', action='store_true')  
     parser.add_argument('--device', default='cuda', type=str) 
     parser.add_argument('--load_feat', action='store_true') 
+    parser.add_argument('--eval', default=True)
     return parser
 
 def preprocess(feed_dict, args):
@@ -93,11 +95,14 @@ def evaluate(predictions, mesh_gt, thresholds, args):
     if args.type == "vox":
         voxels_src = predictions
         H,W,D = voxels_src.shape[2:]
-        vertices_src, faces_src = mcubes.marching_cubes(voxels_src.detach().cpu().squeeze().numpy(), isovalue=0.5)
+        vertices_src, faces_src = mcubes.marching_cubes(voxels_src.detach().cpu().squeeze().numpy(), isovalue=0.0)
         vertices_src = torch.tensor(vertices_src).float()
         faces_src = torch.tensor(faces_src.astype(int))
         mesh_src = pytorch3d.structures.Meshes([vertices_src], [faces_src])
-        pred_points = sample_points_from_meshes(mesh_src, args.n_points)
+        if mesh_src.isempty():
+            pred_points = torch.randn((1, 1000, 3))
+        else:
+            pred_points = sample_points_from_meshes(mesh_src, args.n_points)
         pred_points = utils_vox.Mem2Ref(pred_points, H, W, D)
         # Apply a rotation transform to align predicted voxels to gt mesh
         angle = -math.pi
@@ -167,22 +172,59 @@ def evaluate_model(args):
         predictions = model(images_gt, args)
 
         metrics = evaluate(predictions, mesh_gt, thresholds, args)
-
+        # print("device:", mesh_gt[0].device)
         # TODO:
         if (step % args.vis_freq) == 0:
 
             if args.type == 'vox':
-                src_images = visualize_vox(predictions[0])
-                tgt_images = visualize_mesh(mesh_gt[0])
+                src_images = visualize_vox(predictions[0][0])
+                tgt_images = visualize_mesh(mesh_gt[0].to(device=args.device))
 
                 images = []
+                image_gt = cv2.resize(images_gt[0].cpu().numpy(), (256, 256))
                 for a, b in zip(src_images, tgt_images):
-                    images.append(np.hstack((images_gt, a, b)))
+                    images.append(np.hstack((image_gt, a, b)))
                 
                 n_frames = 15
                 my_images = [(frame * 255).astype(np.uint8) if frame.dtype != np.uint8 else frame for frame in images]
                 duration = 1000 // n_frames # Convert FPS (frames per second) to duration (ms per frame)
                 imageio.mimsave(f'vis/{step}_vox.gif', my_images, duration=duration, loop=0)
+
+            if args.type == 'point':
+
+                points = predictions[0]
+                color = (points - points.min()) / (points.max() - points.min())
+                point_cloud = pytorch3d.structures.Pointclouds(
+                    points=[points], features=[color],
+                ).to(args.device)
+
+                src_images = visualize_point_cloud(point_cloud)
+                tgt_images = visualize_mesh(mesh_gt[0].to(device=args.device))
+
+                images = []
+                image_gt = cv2.resize(images_gt[0].cpu().numpy(), (256, 256))
+                for a, b in zip(src_images, tgt_images):
+                    images.append(np.hstack((image_gt, a, b)))
+                
+                n_frames = 15
+                my_images = [(frame * 255).astype(np.uint8) if frame.dtype != np.uint8 else frame for frame in images]
+                duration = 1000 // n_frames # Convert FPS (frames per second) to duration (ms per frame)
+                imageio.mimsave(f'vis/{step}_points.gif', my_images, duration=duration, loop=0)
+            
+            if args.type == 'mesh':
+                src_images = visualize_mesh(predictions[0][0])
+                tgt_images = visualize_mesh(mesh_gt[0].to(device=args.device))
+
+                images = []
+                image_gt = cv2.resize(images_gt[0].cpu().numpy(), (256, 256))
+                for a, b in zip(src_images, tgt_images):
+                    images.append(np.hstack((image_gt, a, b)))
+                
+                n_frames = 15
+                my_images = [(frame * 255).astype(np.uint8) if frame.dtype != np.uint8 else frame for frame in images]
+                duration = 1000 // n_frames # Convert FPS (frames per second) to duration (ms per frame)
+                imageio.mimsave(f'vis/{step}_mesh.gif', my_images, duration=duration, loop=0)
+
             # plt.imsave(f'vis/{step}_{args.type}.png', rend)
       
 

@@ -172,7 +172,7 @@ def visualize_vox(voxels):
     voxel_size = voxels.shape[1]
     device = voxels.device
 
-    vertices, faces = mcubes.marching_cubes(mcubes.smooth(voxels.cpu().detach().numpy()), isovalue=0)
+    vertices, faces = mcubes.marching_cubes(mcubes.smooth(voxels.cpu().detach().numpy()), isovalue=0.0)
     vertices = torch.tensor(vertices).float()
     faces = torch.tensor(faces.astype(int))
     # Vertex coordinates are indexed by array position, so we need to
